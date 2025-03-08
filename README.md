@@ -1,4 +1,4 @@
-#以最快的方式达到最优的off-policy prm的效果
+#MCTS with moe at tts prm
 
 实验流程（含计划）
  
