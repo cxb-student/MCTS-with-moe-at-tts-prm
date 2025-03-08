@@ -1,1 +1,16 @@
-# MCTS-with-moe-at-tts-prm
+以最快的方式达到最优的off-policy prm的效果
+
+实验流程（含计划）
+      1.完善mcts方法
+      2.构建moe架构
+      3.grpo训练gate
+      4.不同gate间实验
+      5.基线测量
+
+
+3.7-3.8 完成search方法的编写，来自于optimal tts的工作
+        改进包含：去除无效代码
+        测试：    用随机奖励替代prm运行，先行跑通
+3.8     完成moe架构编写
+        包含：gate网络（注意力）
+        未测试（预计3.9）
