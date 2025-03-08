@@ -10,7 +10,7 @@
 
 
 3.7-3.8 完成search方法的编写，来自于optimal tts的工作
-![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/img_v3_02k6_ddb668fe-2a80-47cb-b83e-580454ddfc8g.jpg)
+![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/image.jpg)
 
            改进包含：去除无效代码
            测试：    用随机奖励替代prm运行，先行跑通
