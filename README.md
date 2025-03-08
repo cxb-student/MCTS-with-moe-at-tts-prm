@@ -1,4 +1,5 @@
 # MCTS_with_moe-prm
+
 理论来源：
 
            1.prm的效果和问题的难度方向高度挂钩
@@ -18,10 +19,13 @@
 3.7-3.8 完成search方法的编写，借鉴于optimal tts的工作
 
 
-![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/image.png)
+![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/random_test.png)
+
+![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/single.png)
 
            改进包含：去除无效代码
-           测试：    用随机奖励替代prm运行，先行跑通
+           测试：    用随机奖励替代prm运行以及加入一个prm，分别测试先行跑通
+           发现问题：用prm的时候会过度思考，所以我认为要在moe上加上一个空白的情况，即原输出，来保证合理性
            
 3.8     完成moe架构编写以及整体架构的集成
    
