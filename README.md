@@ -9,7 +9,7 @@
            5.基线测量
 
 
-3.7-3.8 完成search方法的编写，来自于optimal tts的工作
+3.7-3.8 完成search方法的编写，借鉴于optimal tts的工作
 
 
 ![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/image.png)
