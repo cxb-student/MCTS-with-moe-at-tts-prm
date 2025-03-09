@@ -8,7 +8,18 @@ import numpy as np
 from transformers import AutoModelForCausalLM
 
 from inference.single_prm_inference import single_prm_inference
-
+from peft import get_peft_model, LoraConfig, TaskType
+lora_r = 8  # LoRA的秩，较小的值意味着更少的参数
+lora_alpha = 16  # LoRA的缩放参数
+lora_dropout = 0.05  # LoRA的dropout率
+peft_config = LoraConfig(
+    task_type=TaskType.CAUSAL_LM,
+    inference_mode=False,
+    r=lora_r,
+    lora_alpha=lora_alpha,
+    lora_dropout=lora_dropout,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+)
 system_prompt = """You are a helpful assistant. A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The Assistant first thinks about the reasoning process in the mind and then provides the user with the answer.\
 The reasoning process and answer are enclosed within <think> </think> and<answer> </answer> tags, respectively, i.e., <think> reasoning process here </think><answer> answer here </answer>.the first word must be <think>"""
 
@@ -204,8 +215,9 @@ class TrainingPipeline:
 if __name__ == "__main__":
     # 假设已有初始化好的模型和数据集
     base_model = AutoModelForCausalLM.from_pretrained("deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", trust_remote_code=True)
+    base_model = get_peft_model(base_model, peft_config)
     prm_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-Math-PRM-7B", trust_remote_code=True)
-
+    prm_model = get_peft_model(prm_model, peft_config)
 
 
     dataset = GSM8KDataset()

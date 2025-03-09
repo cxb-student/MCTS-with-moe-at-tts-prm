@@ -6,13 +6,25 @@ import torch.functional as F
 from component.gate import gate_network
 from inference.moe_inference import moe_inference
 from model_with_one_prm import GSM8KDataset
-
+from peft import get_peft_model, LoraConfig, TaskType
+lora_r = 8  # LoRA的秩，较小的值意味着更少的参数
+lora_alpha = 16  # LoRA的缩放参数
+lora_dropout = 0.05  # LoRA的dropout率
+peft_config = LoraConfig(
+    task_type=TaskType.CAUSAL_LM,
+    inference_mode=False,
+    r=lora_r,
+    lora_alpha=lora_alpha,
+    lora_dropout=lora_dropout,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+)
 class MoETrainer:
     def __init__(self, base_model, prms, gate_model, lr=3e-6, beta=0.1, group_size=5):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # 初始化所有模型
         self.base_model = base_model.to(self.device)
+
         self.prms = [prm.to(self.device) for prm in prms]
         self.gate_model = gate_model.to(self.device)
 
@@ -142,11 +154,13 @@ class MoEPipeline:
 
 
 base_model = AutoModelForCausalLM.from_pretrained("base_model_path")
+base_model = get_peft_model(base_model, peft_config)
 prm_models = [
     AutoModelForCausalLM.from_pretrained("prm1_path"),
     AutoModelForCausalLM.from_pretrained("prm2_path"),
     AutoModelForCausalLM.from_pretrained("prm3_path")
 ]
+prm_models = [get_peft_model(prm, peft_config) for prm in prm_models]
 gate_model = gate_network(d_model=1024)
 
 # 创建训练器
