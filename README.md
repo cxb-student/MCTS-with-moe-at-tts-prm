@@ -49,4 +49,4 @@
             一个是moe架构的prm的search方法（未完成）
             应该先冷启动训练gate，之后再整体sft
 
-        ![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/train.png)
+![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/train.png)
