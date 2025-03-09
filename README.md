@@ -1,5 +1,5 @@
 # MCTS_with_moe-prm
-//MCTS_with_grpo 可能效果也不错//
+（//MCTS_with_grpo 可能效果也不错//）
 
 理论来源：
 
@@ -50,7 +50,7 @@
 
 ![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/train.png)
 
-3.9     单prm训练的想法，结合mcts和grpo的优点（代码写完未跑通）
+3.9     单prm训练的想法，结合mcts和grpo的优点
 
          1.首先传统的反向传播肯定是不能够直接使用
          可以分别创建loss
@@ -61,3 +61,12 @@
          就是我在search的最后一步不进行最优选择
          而是保留beam_size个候选答案，形成一组
          然后根据规则进行奖励（格式奖励，答案奖励和优势奖励）
+
+3.9晚上  完成了单prm和moe——prm代码的编写
+
+         具体实现方法：
+![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/show_single.png)
+         其实moe的区别跟这个不大，只是再prm整体的loss中还要归责
+         然后通过规则判断出gate要选哪一个prm
+         这样来形成标签来训练
+
