@@ -1,5 +1,5 @@
 # MCTS_with_moe-prm
-
+//MCTS_with_grpo 可能效果也不错//
 理论来源：
 
            1.prm的效果和问题的难度方向高度挂钩
@@ -49,7 +49,7 @@
 
 ![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/train.png)
 
-3.9     单prm训练的想法（未落实预计3.10号形成初步的想法）
+3.9     单prm训练的想法，结合mcts和grpo的优点（未落实，仅有初步的代码）
 
          1.首先传统的反向传播肯定是不能够直接使用
          目前想的是使用策略梯度近似，依靠奖励来反馈
