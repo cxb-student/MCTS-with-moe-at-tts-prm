@@ -178,7 +178,7 @@ class CoTEnv(BaseEnv):
             cot_examples=self._cot_example_str,
             cot_task_desc=self._task_desc_str,
             problem_format_str=self._problem_format_str,
-            problem_input=self.math_problem["question"],
+            problem_input=self.math_problem["Q"],
             is_few_shot=self.is_few_shot,
             model_names=self.model_names,
         )
@@ -604,8 +604,6 @@ class Node(object):
             return "root"
         else:
             return "child: value: {:.3f}, prior: {:.3f}".format(self.last_action, self.value, self.prior_p)
-
-
 class LanguageNode(Node):
     text_state: Optional[str] = None
     last_action: Optional[str] = None
@@ -709,30 +707,19 @@ class SearchTree:
 
     def __init__(self, cfg) -> None:
         self._cfg = cfg
-
         self._num_simulations = self._cfg.get("num_simulations", 20)
-
-        # UCB formula
-        self._pb_c_base = self._cfg.get("pb_c_base", 19652)  # 19652
-        self._pb_c_init = self._cfg.get("pb_c_init", 1.25)  # 1.25
-
-        # Root prior exploration noise.
-        self._root_dirichlet_alpha = self._cfg.get("root_dirichlet_alpha", 0.3)  # 0.3  # for chess, 0.03 for Go and 0.15 for shogi.
-        self._root_noise_weight = self._cfg.get("root_noise_weight", 0.25)  # 0.25
-
+        self._pb_c_base = self._cfg.get("pb_c_base", 19652)
+        self._pb_c_init = self._cfg.get("pb_c_init", 1.25)
+        self._root_dirichlet_alpha = self._cfg.get("root_dirichlet_alpha", 0.3)
+        self._root_noise_weight = self._cfg.get("root_noise_weight", 0.25)
         self.root = None
-
         self.answers = set()
         self.wrong_answers = set()
         self.visited_paths = None
-
         self.no_terminal_reward = self._cfg.get("no_terminal_reward", True)
         self.mask_non_terminal_node_value = self._cfg.get("mask_non_terminal_node_value", False)
-
         self._init_critic_value = self._cfg.get("init_critic_value", True)
-
         self._completion_tokens = 0
-
         self.model_names = self._cfg.get("model_names", [])
         self.direct_io = self._cfg.get("direct_io", 0)
         self.max_actions = self._cfg.get("max_actions", 0)
@@ -748,103 +735,127 @@ class SearchTree:
             self.clear_node(child)
 
     def beam_search(
-        self,
-        simulate_env: CoTEnv,
-        beam_size: int,
-        max_step: int,
-        reward_model_fn: Optional[Callable] = None,
+            self,
+            simulate_env: "CoTEnv",
+            beam_size: int,
+            max_step: int,
+            reward_model_fn: Optional[Callable] = None,
     ) -> List[Dict]:
+        """
+        修改后的 beam_search 输出 5 个候选答案，每个候选包含：
+          - 最终生成文本（text）
+          - 累计 log 概率（total_log_prob）
+          - 轨迹概率（trajectory_probability，= exp(total_log_prob)）
+          - 每一步的 reward_history、token_history、prob_history、model_history、logits_history 等
+          - 总奖励（total_reward，= sum(reward_history)）
+        便于后续 GRPO 损失的计算和训练生成模型与 PRM。
+        """
         if max_step == 1:
-            assert self.direct_io
+            assert self.direct_io, "当 max_step == 1 时应使用 direct_io 模式。"
+
         api_call_completion_tokens = 0
         _, info = simulate_env.reset(update_legal_action=True)
         api_call_completion_tokens += info["api_completion_token"]
+
+        # 初始化 root 节点，累计 log 概率从 0 开始
         if self.root is None:
             root = LanguageNode(text_state=simulate_env.get_state(model_name='raw'))
             self._expand_leaf_node(root, simulate_env, reward_model_fn)
             self.root = root
 
-        end_nodes, top_k_nodes = [], [(-root._initial_value, -root._initial_value, -root._parent_value, root, simulate_env.copy())]
-        k = copy.deepcopy(beam_size)
+        # 每个候选轨迹记录为一个 tuple:
+        # (neg_total, neg_value, neg_parent_value, node, env, total_log_prob)
+        # 其中 total_log_prob 表示从根节点到当前节点累计的 log 概率
+        end_nodes = []
+        top_k_nodes = [(-root._initial_value, -root._initial_value, -root._parent_value,
+                        root, simulate_env.copy(), 0.0)]
+        k = beam_size
 
-        for i in range(max_step + 1):
-            cur_nodes_to_search = top_k_nodes
-            top_k_nodes = []
-            for cur_neg_q_plus_a, cur_neg_v, cur_neg_parent_v, cur_node, cur_env in cur_nodes_to_search:
-                if cur_node.terminated:
-                    end_nodes.append((cur_neg_q_plus_a, cur_neg_v, cur_neg_parent_v, cur_node, cur_env))
-                    if len(end_nodes) == beam_size:
-                        break
-                elif len(end_nodes) < beam_size:
-                    # select at most topk children add push to heap
-                    assert (len(cur_node.children) > 0), "in beam search you should expand this non-terminal node at first."
-                    if self.direct_io:
-                        ps = {child_idx: copy.deepcopy(child.prior_p) for child_idx, child in cur_node.children.items()}
-                        num_tokens = {child_idx: copy.deepcopy(child.num_generated_token) for child_idx, child in cur_node.children.items()}
-                        normalized_ps = {child_idx: p ** (1 / max(1, num_tokens[child_idx])) for child_idx, p in ps.items()}
-                        values = {child_idx: copy.deepcopy(child._initial_value) for child_idx, child in cur_node.children.items()}
-                        parent_values = {child_idx: copy.deepcopy(child._parent_value) for child_idx, child in cur_node.children.items()}
-                        q_plus_alpha_a = values
-                        k = beam_size - len(end_nodes)
-                        top_k_children = sorted(
-                            [(child_idx, child, q_plus_alpha_a[child_idx], values[child_idx], parent_values[child_idx]) for child_idx, child in
-                             cur_node.children.items()],
-                            key=lambda x: x[2], reverse=True,
-                        )[:k]
-                        for c_idx, c_node, c_q_plus_a, c_value, c_parent_value in top_k_children:
-                            new_env = cur_env.copy()
-                            heapq.heappush(top_k_nodes, (-c_q_plus_a, -c_value, -c_parent_value, c_node, new_env))
-                    else:
-                        ps = {action: copy.deepcopy(child.prior_p) for action, child in cur_node.children.items()}
-                        num_tokens = {action: copy.deepcopy(child.num_generated_token) for action, child in cur_node.children.items()}
-                        normalized_ps = {action: p ** (1 / max(1, num_tokens[action])) for action, p in ps.items()}
-                        values = {action: copy.deepcopy(child._initial_value) for action, child in cur_node.children.items()}
-                        parent_values = {action: copy.deepcopy(child._parent_value) for action, child in cur_node.children.items()}
-                        q_plus_alpha_a = values
-                        k = beam_size - len(end_nodes)
-                        top_k_children = sorted(
-                            [(action, child, q_plus_alpha_a[action], values[action], parent_values[action]) for action, child in cur_node.children.items()],
-                            key=lambda x: x[2], reverse=True,
-                        )[:k]
-                        for c_act, c_node, c_q_plus_a, c_value, c_parent_value in top_k_children:
-                            new_env = cur_env.copy()
-                            heapq.heappush(top_k_nodes, (-c_q_plus_a, -c_value, -c_parent_value, c_node, new_env))
-            top_k_nodes = heapq.nsmallest(k, top_k_nodes)  # nsmallest since we negate the value
-
-            # expand selected nodes
-            for q_plus_a, value, parent_value, node, new_env in top_k_nodes:
-                _, _, terminated, truncated, info = new_env.step(
-                    node.last_action, update_legal_action=self.direct_io == 0, model_name=node.model_name,
-                    reward=node._initial_value, num_token=node.num_generated_token, prob=node.prior_p,
-                )
-                api_call_completion_tokens += info["api_completion_token"]
-                if terminated or truncated:
+        for step in range(max_step + 1):
+            next_top_k = []
+            for neg_total, neg_value, neg_parent_value, node, env, total_log_prob in top_k_nodes:
+                if node.terminated:
+                    end_nodes.append((neg_total, neg_value, neg_parent_value, node, env, total_log_prob))
+                    continue
+                # 如果当前节点还没有扩展，则先扩展（确保 children 非空）
+                if not node.children:
+                    self._expand_leaf_node(node, env, reward_model_fn)
+                if not node.children:
                     node.set_as_terminate_node()
-                else:
-                    self._expand_leaf_node(node, new_env, reward_model_fn)
+                    end_nodes.append((neg_total, neg_value, neg_parent_value, node, env, total_log_prob))
+                    continue
 
-            if len(end_nodes) == beam_size:
+                # 针对 direct_io 与非 direct_io 模式分别处理
+                if self.direct_io:
+                    for child_idx, child in node.children.items():
+                        # 这里 child.prior_p 为生成时的概率，计算 log 后累加
+                        new_log_prob = np.log(child.prior_p + 1e-8)
+                        new_total_log_prob = total_log_prob + new_log_prob
+                        new_env = env.copy()
+                        _, _, terminated, truncated, info = new_env.step(
+                            child.last_action,
+                            update_legal_action=(self.direct_io == 0),
+                            model_name=child.model_name,
+                            reward=child._initial_value,
+                            num_token=child.num_generated_token,
+                            prob=child.prior_p,
+                        )
+                        api_call_completion_tokens += info["api_completion_token"]
+                        new_item = (-child._initial_value, -child._initial_value, -child._parent_value,
+                                    child, new_env, new_total_log_prob)
+                        next_top_k.append(new_item)
+                else:
+                    for action, child in node.children.items():
+                        new_log_prob = np.log(child.prior_p + 1e-8)
+                        new_total_log_prob = total_log_prob + new_log_prob
+                        new_env = env.copy()
+                        _, _, terminated, truncated, info = new_env.step(
+                            child.last_action,
+                            update_legal_action=True,
+                            model_name=child.model_name,
+                            reward=child._initial_value,
+                            num_token=child.num_generated_token,
+                            prob=child.prior_p,
+                        )
+                        api_call_completion_tokens += info["api_completion_token"]
+                        new_item = (-child._initial_value, -child._initial_value, -child._parent_value,
+                                    child, new_env, new_total_log_prob)
+                        next_top_k.append(new_item)
+            if len(end_nodes) >= beam_size:
+                break
+            if next_top_k:
+                top_k_nodes = heapq.nsmallest(beam_size, next_top_k)
+            else:
                 break
 
+        # 合并所有候选：已终止的轨迹和当前未终止的轨迹
+        all_candidates = end_nodes + top_k_nodes
         traj_list = []
-        for i, (neg_e_q_plus_a, neg_e_v, neg_e_parent_v, e_node, e_env) in enumerate(end_nodes):
+        for i, (neg_total, neg_value, neg_parent_value, node, env, total_log_prob) in enumerate(all_candidates):
+            # 计算轨迹概率（exp(total_log_prob)）和总奖励（reward_history 累加）
+            trajectory_probability = float(np.exp(total_log_prob))
+            total_reward = float(np.mean(env.reward_history)) if env.reward_history else 0.0
             traj_list.append({
                 "path_idx": i,
-                "text": e_env.answer,
-                "value": -neg_e_v,
-                "parent_value": -neg_e_parent_v,
-                "q_plus_a": -neg_e_q_plus_a,
+                "text": env.answer,
+                "value": -neg_value,
+                "parent_value": -neg_parent_value,
+                "q_plus_a": -neg_total,
+                "total_log_prob": float(total_log_prob),
+                "trajectory_probability": trajectory_probability,
+                "total_reward": total_reward,
                 "api_completion_tokens": 0,
-                "tree_completion_tokens": 0,
-                "reward_history": e_env.reward_history,
-                "token_history": e_env.token_history,
-                "prob_history": e_env.prob_history,
-                "model_history": e_env.model_history,
-                # num_generated_token is hard to compute for each single answer
+                "tree_completion_tokens": self._completion_tokens,
+                "reward_history": env.reward_history,
+                "token_history": env.token_history,
+                "prob_history": env.prob_history,
+                "model_history": env.model_history,
+                "logits_history": env.logits_history,
             })
-        traj_list[-1]["tree_completion_tokens"] = self._completion_tokens
-        traj_list[-1]["api_completion_tokens"] = api_call_completion_tokens
-        return traj_list
+        if traj_list:
+            traj_list[-1]["api_completion_tokens"] = api_call_completion_tokens
+        final_candidates = sorted(traj_list, key=lambda x: x["total_log_prob"], reverse=True)[:5]
+        return final_candidates
 
     def _select_child(self, node: LanguageNode, simulate_env: CoTEnv) -> Tuple[Union[int, float], Node]:
         """

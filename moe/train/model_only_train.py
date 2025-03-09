@@ -295,22 +295,13 @@ def GRPO_step(batch):
     per_token_loss = -(per_token_loss - beta * per_token_kl)
     loss = ((per_token_loss * completion_mask).sum(dim=1) / completion_mask.sum(dim=1)).mean()
     return loss
-
-
 def get_batch():
     if raw_queue.empty():
         return None
     return raw_queue.get()
-
-
-# 初始生成一些样本
-
 from tqdm import tqdm
-
-# 记录训练过程中的正确率
 training_accuracies = []
-eval_interval = 100  # 每100步评估一次正确率
-
+eval_interval = 100
 progress = tqdm(range(1, all_steps + 1))
 for step in progress:
     print(f'第{step}步')
