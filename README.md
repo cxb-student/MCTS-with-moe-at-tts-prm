@@ -35,7 +35,7 @@
 
 3.8     阅读grpo文献，找到通用代码框架
 
-3.9     github上找到grpo的现成代码，借鉴于simple_grpo
+3.8     github上找到grpo的现成代码，借鉴于simple_grpo
 
             减去了分布式训练的部分，并将math-verify的verify方法取缔
             （版本不兼容咋也找不到文档）
@@ -44,8 +44,8 @@
             数据集就是最简单的gsm8k
             因为会出bug，版本不兼容
             我将他分开写成三个文件，一个是单独的sft
-            一个是只有一个prm的search来sft（未完成）
-            一个是moe架构的prm的search方法（未完成）
+            一个是只有一个prm的search来sft
+            一个是moe架构的prm的search方法
             应该先冷启动训练gate，之后再整体sft
 
 ![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/train.png)
