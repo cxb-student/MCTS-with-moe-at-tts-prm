@@ -50,14 +50,14 @@
 
 ![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/train.png)
 
-3.9     单prm训练的想法，结合mcts和grpo的优点（未落实，仅有初步的代码）
+3.9     单prm训练的想法，结合mcts和grpo的优点（代码写完未跑通）
 
          1.首先传统的反向传播肯定是不能够直接使用
-         目前想的是使用策略梯度近似，依靠奖励来反馈
+         可以分别创建loss
          或者是顺着tragedy向前追溯，但这样只能够训练到llm而prm够不到
          
          2.关于奖励的方法以及整体的框架
          我有一个想法是利用grpo的最新成果
          就是我在search的最后一步不进行最优选择
          而是保留beam_size个候选答案，形成一组
-         然后根据规则进行奖励（格式奖励和优势奖励）
+         然后根据规则进行奖励（格式奖励，答案奖励和优势奖励）
