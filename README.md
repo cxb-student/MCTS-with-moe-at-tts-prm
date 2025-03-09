@@ -66,6 +66,7 @@
 
          具体实现方法：
 ![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/show_single.png)
+
          其实moe的区别跟这个不大，只是再prm整体的loss中还要归责
          然后通过规则判断出gate要选哪一个prm
          这样来形成标签来训练
