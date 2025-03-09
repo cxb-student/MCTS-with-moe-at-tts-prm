@@ -39,24 +39,29 @@
 
             减去了分布式训练的部分，并将math-verify的verify方法取缔
             （版本不兼容咋也找不到文档）
+            
             加入lora框架，减轻内存消耗
             先测了一下基线
             数据集就是最简单的gsm8k
-            因为会出bug，版本不兼容
-            我将他分开写成三个文件，一个是单独的sft
+
+            我将他分开写成三个文件
+            
+            一个是单独的sft
             一个是只有一个prm的search来sft（预计9号完成）
             一个是moe架构的prm的search方法（预计9号完成）
-            应该先冷启动训练gate，之后再整体sft
+
 
 ![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/train.png)
 
 3.9     单prm训练的想法，结合mcts和grpo的优点
 
          1.首先传统的反向传播肯定是不能够直接使用
+         
          可以分别创建loss
          或者是顺着tragedy向前追溯，但这样只能够训练到llm而prm够不到
          
          2.关于奖励的方法以及整体的框架
+         
          我有一个想法是利用grpo的最新成果
          就是我在search的最后一步不进行最优选择
          而是保留beam_size个候选答案，形成一组
@@ -74,5 +79,8 @@
          此外，联合的训练效果可能不稳定
          到时候可以删除一部分进行分块训练。
 
-         lora框架未加入，预计10号做出lora版本
+3.10凌晨
+
+         lora框架已加入
+         想调试发现跑不动7b的根本
 
