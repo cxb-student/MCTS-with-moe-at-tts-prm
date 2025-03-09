@@ -37,9 +37,9 @@ print("Gate weights:", gate_wate)
 """
 求moe奖励模型
 """
-prm1 = "Qwen/Qwen2.5-Math-7B-PRM800K"
-prm2 = "RLHFlow/Llama3.1-8B-PRM-Mistral-Data"
-prm3 = "peiyi9979/math-shepherd-mistral-7b-prm"
+prm1 = "Qwen/Qwen2.5-Math-PRM-7B"
+prm2 = "peiyi9979/math-shepherd-mistral-7b-prm"
+prm3 = "RLHFlow/Llama3.1-8B-PRM-Deepseek-Data"
 reward_model = MoERewardModel(prm1, prm2, prm3, hidden_size)
 
 """

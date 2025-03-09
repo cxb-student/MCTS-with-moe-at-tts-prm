@@ -8,12 +8,12 @@ from peft import TaskType
 class MoERewardModel(nn.Module):
     def __init__(self, prm1, prm2, prm3, d_model):
         super(MoERewardModel, self).__init__()
-        self.t1=AutoTokenizer.from_pretrained(prm1)
+        self.t1=AutoTokenizer.from_pretrained(prm1,trust_remote_code=True)
         self.t2=AutoTokenizer.from_pretrained(prm2)
         self.t3=AutoTokenizer.from_pretrained(prm3)
         
         # 加载基础模型
-        base_model1 = AutoModelForCausalLM.from_pretrained(prm1, torch_dtype=torch.bfloat16)
+        base_model1 = AutoModelForCausalLM.from_pretrained(prm1, torch_dtype=torch.bfloat16,trust_remote_code=True)
         base_model2 = AutoModelForCausalLM.from_pretrained(prm2, torch_dtype=torch.bfloat16)
         base_model3 = AutoModelForCausalLM.from_pretrained(prm3, torch_dtype=torch.bfloat16)
         

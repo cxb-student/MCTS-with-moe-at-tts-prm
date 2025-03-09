@@ -14,7 +14,6 @@ class DeepSeekLM(LanguageModelCallingFunction):
     def __init__(self, model_name="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", llm_step_tag="ки\n"):
         super().__init__(llm_step_tag=llm_step_tag)
         self.model_name = model_name
-        # 延迟加载模型，避免在初始化时就占用大量内存
         self.tokenizer = None
         self.model = None
         
