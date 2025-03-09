@@ -9,9 +9,9 @@ from transformers import AutoModelForCausalLM
 
 from inference.single_prm_inference import single_prm_inference
 from peft import get_peft_model, LoraConfig, TaskType
-lora_r = 8  # LoRA的秩，较小的值意味着更少的参数
-lora_alpha = 16  # LoRA的缩放参数
-lora_dropout = 0.05  # LoRA的dropout率
+lora_r = 8
+lora_alpha = 16
+lora_dropout = 0.05
 peft_config = LoraConfig(
     task_type=TaskType.CAUSAL_LM,
     inference_mode=False,
@@ -43,11 +43,9 @@ class DualRewardTrainer:
     def __init__(self, base_model, prm_model, lr=3e-6, beta=0.1, group_size=5):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # 初始化双模型
         self.base_model = base_model.to(self.device)
         self.prm_model = prm_model.to(self.device)
 
-        # 优化器配置
         self.base_optim = torch.optim.AdamW(
             self.base_model.parameters(),
             lr=lr,
@@ -59,19 +57,19 @@ class DualRewardTrainer:
             weight_decay=0.02
         )
 
-        # 训练参数
+
         self.beta = beta
         self.grad_clip = 1.0
         self.group_size = group_size
 
-        # 奖励函数权重
+
         self.answer_reward_weight = 0.7
         self.format_reward_weight = 0.3
 
     def _compute_group_advantages(self, rewards):
-        """计算组优势值"""
+
         advantages = []
-        # 按组处理，每组group_size个样本
+
         for i in range(0, len(rewards), self.group_size):
             group = rewards[i:i + self.group_size]
             group_mean = group.mean()
@@ -79,7 +77,7 @@ class DualRewardTrainer:
             advantages.extend((group - group_mean) / group_std)
         return torch.stack(advantages)
     def compute_rewards(self, trajectory):
-        """计算复合奖励"""
+
         answer_reward = self._answer_reward(trajectory)
         format_reward = self._format_reward(trajectory)
         return (self.answer_reward_weight * answer_reward +
@@ -87,16 +85,16 @@ class DualRewardTrainer:
 
     def reward_correct(item, answer):
         pattern = r'\d+\.\d+|\d+/\d+|\d+'
-        nums = re.findall(pattern, answer)  # 使用正则表达式在answer中查找所有数字
+        nums = re.findall(pattern, answer)
         if len(nums) == 0: return -1.0
-        lastnum = nums[-1]  # 用answer中最后一个数字和ground_truth做比较
-        # 直接比较数值而不使用verify函数
+        lastnum = nums[-1]
+
         try:
             ans_val = float(lastnum)
             ground_truth_val = float(item["A"])
             return 1 if abs(ans_val - ground_truth_val) < 1e-6 else -1
         except ValueError:
-            # 如果无法转换为浮点数，则尝试使用parse但不使用verify
+
             try:
                 ans = parse(lastnum, extraction_config=[ExprExtractionConfig()])
                 ground_truth = parse(item["A"], extraction_config=[ExprExtractionConfig()])
@@ -126,11 +124,11 @@ class DualRewardTrainer:
         return -torch.mean(log_probs * group_advantages)
 
     def prm_loss(self, trajectories):
-        """PRM模型损失：评分校准与奖励一致性"""
+
         pred_scores = torch.stack([t['tol_reward'] for t in trajectories]).to(self.device)
         true_scores = torch.tensor([self.compute_rewards(t) for t in trajectories]).to(self.device)
 
-        # 双重约束：MSE损失 + 排序一致性损失
+
         mse_loss = nn.MSELoss()(pred_scores, true_scores)
 
         # 确保高奖励样本有更高评分
@@ -141,9 +139,7 @@ class DualRewardTrainer:
         return mse_loss + 0.3 * rank_loss
 
     def train_step(self, trajectories):
-        """修改后的训练步骤"""
-        # ========== 数据分组处理 ==========
-        # 按group_size分组，不足部分自动处理
+
         group_num = len(trajectories) // self.group_size
         grouped_trajs = [trajectories[i * self.group_size:(i + 1) * self.group_size]
                          for i in range(group_num)]
@@ -155,7 +151,7 @@ class DualRewardTrainer:
 
         # 逐组处理
         for group in grouped_trajs:
-            # ========== Base Model 更新 ==========
+
             self.base_model.train()
             self.base_optim.zero_grad()
             loss_base = self.base_loss(group)
@@ -163,8 +159,6 @@ class DualRewardTrainer:
             nn.utils.clip_grad_norm_(self.base_model.parameters(), self.grad_clip)
             self.base_optim.step()
             total_base_loss += loss_base.item()
-
-            # ========== PRM Model 更新 ==========
             self.prm_model.train()
             self.prm_optim.zero_grad()
             loss_prm = self.prm_loss(group)
@@ -172,8 +166,6 @@ class DualRewardTrainer:
             nn.utils.clip_grad_norm_(self.prm_model.parameters(), self.grad_clip)
             self.prm_optim.step()
             total_prm_loss += loss_prm.item()
-
-            # 统计指标
             group_rewards = [self.compute_rewards(t) for t in group]
             avg_reward += np.mean(group_rewards)
             max_reward = max(max_reward, np.max(group_rewards))
@@ -192,10 +184,8 @@ class TrainingPipeline:
     def run(self, epochs=10, generate_callback=None):
             for epoch in range(epochs):
                 for batch in self.loader:
-                    # 生成轨迹数据（保证生成数量是group_size的整数倍）
                     trajectories = []
                     for q in batch["Q"]:
-                        # 生成固定数量的轨迹（示例设为5）
                         trajs = generate_callback({"Q": q})
                         trajectories += trajs[:self.trainer.group_size]  # 截取固定数量
 
@@ -211,9 +201,7 @@ class TrainingPipeline:
                      )
 
 
-# 使用示例
 if __name__ == "__main__":
-    # 假设已有初始化好的模型和数据集
     base_model = AutoModelForCausalLM.from_pretrained("deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", trust_remote_code=True)
     base_model = get_peft_model(base_model, peft_config)
     prm_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-Math-PRM-7B", trust_remote_code=True)
@@ -224,8 +212,6 @@ if __name__ == "__main__":
 
     trainer = DualRewardTrainer(base_model, prm_model)
     pipeline = TrainingPipeline(trainer, dataset)
-
-    # 运行训练流程
     pipeline.run(
         epochs=10,
         generate_callback=single_prm_inference  # 对接现有生成函数

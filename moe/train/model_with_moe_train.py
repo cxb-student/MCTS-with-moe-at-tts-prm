@@ -7,9 +7,9 @@ from component.gate import gate_network
 from inference.moe_inference import moe_inference
 from model_with_one_prm import GSM8KDataset
 from peft import get_peft_model, LoraConfig, TaskType
-lora_r = 8  # LoRA的秩，较小的值意味着更少的参数
-lora_alpha = 16  # LoRA的缩放参数
-lora_dropout = 0.05  # LoRA的dropout率
+lora_r = 8
+lora_alpha = 16
+lora_dropout = 0.05
 peft_config = LoraConfig(
     task_type=TaskType.CAUSAL_LM,
     inference_mode=False,
@@ -28,19 +28,16 @@ class MoETrainer:
         self.prms = [prm.to(self.device) for prm in prms]
         self.gate_model = gate_model.to(self.device)
 
-        # 优化器配置
         self.base_optim = torch.optim.AdamW(self.base_model.parameters(), lr=lr)
         self.prm_opts = [torch.optim.AdamW(prm.parameters(), lr=lr * 0.3) for prm in self.prms]
         self.gate_optim = torch.optim.AdamW(self.gate_model.parameters(), lr=lr * 0.5)
 
-        # 训练参数
         self.beta = beta
         self.grad_clip = 1.0
         self.group_size = group_size
         self.num_prms = len(prms)
 
-        # 奖励权重
-        self.reward_weights = [0.4, 0.3, 0.3]  # 初始权重
+        self.reward_weights = [0.4, 0.3, 0.3]
 
     def _compute_gate_weights(self, embeddings):
         """计算门控权重"""
@@ -56,10 +53,8 @@ class MoETrainer:
             pred_scores = torch.stack([t[f'prm{i}_score'] for t in trajectories])
             true_scores = torch.tensor([self._compute_true_score(t) for t in trajectories])
 
-            # 基础MSE损失
             mse_loss = nn.MSELoss()(pred_scores, true_scores)
 
-            # 排序一致性损失
             sorted_pred = torch.sort(pred_scores, descending=True).values
             sorted_true = torch.sort(true_scores, descending=True).values
             rank_loss = nn.KLDivLoss()(
@@ -71,8 +66,8 @@ class MoETrainer:
         return torch.stack(prm_losses)
 
     def _compute_gate_loss(self, gate_weights, prm_performances):
-        """计算门控网络损失"""
-        # 性能加权损失
+
+
         performance_weights = F.softmax(torch.tensor(prm_performances), dim=-1)
         return -torch.sum(gate_weights * performance_weights)
 
@@ -81,26 +76,21 @@ class MoETrainer:
         rewards = torch.tensor([self._compute_true_score(t) for t in trajectories])
         log_probs = torch.stack([t['total_log_prob'] for t in trajectories])
 
-        # 组优势计算
         group_advantages = self._compute_group_advantages(rewards)
 
-        # 门控权重增强
         gate_enhanced = torch.sum(gate_weights * self.reward_weights, dim=1)
         return -torch.mean(log_probs * group_advantages * gate_enhanced)
 
     def train_step(self, trajectories, embeddings):
-        """完整训练步骤"""
-        # 计算门控权重
+
         gate_weights = self._compute_gate_weights(embeddings)
 
-        # ===== 基础模型更新 =====
         self.base_optim.zero_grad()
         loss_base = self.base_loss(trajectories, gate_weights)
         loss_base.backward(retain_graph=True)
         nn.utils.clip_grad_norm_(self.base_model.parameters(), self.grad_clip)
         self.base_optim.step()
 
-        # ===== PRM模型更新 =====
         prm_losses = self._compute_prm_losses(trajectories, gate_weights)
         for i, (prm, optimizer) in enumerate(zip(self.prms, self.prm_opts)):
             optimizer.zero_grad()
@@ -108,7 +98,6 @@ class MoETrainer:
             nn.utils.clip_grad_norm_(prm.parameters(), self.grad_clip)
             optimizer.step()
 
-        # ===== 门控网络更新 =====
         self.gate_optim.zero_grad()
         prm_perfs = [1 / (loss.item() + 1e-8) for loss in prm_losses]  # 性能指标
         loss_gate = self._compute_gate_loss(gate_weights, prm_perfs)
@@ -116,7 +105,6 @@ class MoETrainer:
         nn.utils.clip_grad_norm_(self.gate_model.parameters(), self.grad_clip)
         self.gate_optim.step()
 
-        # 更新动态权重
         self.reward_weights = F.softmax(torch.tensor(prm_perfs), dim=-1).tolist()
 
         return {
@@ -138,12 +126,12 @@ class MoEPipeline:
     def run(self, epochs=10, generate_callback=None):
         for epoch in range(epochs):
             for batch in self.loader:
-                # 生成轨迹和嵌入
+
                 trajectories, embeddings = generate_callback(batch)
 
-                # 执行训练
+
                 metrics = self.trainer.train_step(trajectories, embeddings)
-                # 打印指标
+
                 print(f"Epoch {epoch + 1}")
                 print(f"Base Loss: {metrics['base_loss']:.4f}")
                 print(f"PRM Losses: [{', '.join([f'{l:.4f}' for l in metrics['prm_losses']])}]")
@@ -163,14 +151,13 @@ prm_models = [
 prm_models = [get_peft_model(prm, peft_config) for prm in prm_models]
 gate_model = gate_network(d_model=1024)
 
-# 创建训练器
+
 trainer = MoETrainer(base_model=base_model, prms=prm_models, gate_model=gate_model, lr=3e-6, group_size=5)
 dataset = GSM8KDataset()
-# 创建数据管道
+
 pipeline = MoEPipeline(trainer, dataset=dataset)
 
-# 运行训练
 pipeline.run(
     epochs=10,
-    generate_callback=moe_inference()  # 需返回(trajectories, embeddings)
+    generate_callback=moe_inference
 )
