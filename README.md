@@ -44,8 +44,8 @@
             数据集就是最简单的gsm8k
             因为会出bug，版本不兼容
             我将他分开写成三个文件，一个是单独的sft
-            一个是只有一个prm的search来sft
-            一个是moe架构的prm的search方法
+            一个是只有一个prm的search来sft（预计9号完成）
+            一个是moe架构的prm的search方法（预计9号完成）
             应该先冷启动训练gate，之后再整体sft
 
 ![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/train.png)
@@ -73,4 +73,6 @@
 
          此外，联合的训练效果可能不稳定
          到时候可以删除一部分进行分块训练。
+
+         lora框架未加入，预计10号做出lora版本
 
