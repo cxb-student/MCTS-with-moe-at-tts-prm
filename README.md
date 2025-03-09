@@ -62,7 +62,7 @@
          而是保留beam_size个候选答案，形成一组
          然后根据规则进行奖励（格式奖励，答案奖励和优势奖励）
 
-3.9晚上  完成了单prm和moe——prm代码的编写
+3.9晚上  完成了单prm和moe——prm代码的编写，代码借鉴于 simple_grpo
 
          具体实现方法：
 ![image](https://github.com/cxb-student/MCTS-with-moe-at-tts-prm/blob/main/show_single.png)
@@ -70,4 +70,7 @@
          其实moe的区别跟这个不大，只是再prm整体的loss中还要归责
          然后通过规则判断出gate要选哪一个prm
          这样来形成标签来训练
+
+         此外，联合的训练效果可能不稳定
+         到时候可以删除一部分进行分块训练。
 
